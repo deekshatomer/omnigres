@@ -5,17 +5,37 @@ as
 $$
 
 with
-    match(id) as (select table_fs_file_id(fs, path))
+    match(id, kind) as (
+        select id, kind
+        from table_fs_files
+        where filename = path and filesystem_id = fs.id
+    ),
+    file_metadata as (
+  select
+    m.id,
+    m.kind,
+    coalesce(sum(length(d.data)), 0) as size,
+    min(d.created_at) as created_at,
+    max(d.accessed_at) as accessed_at,
+    max(d.modified_at) as modified_at
+from match m
+left join table_fs_file_data d on m.id = d.file_id
+group by m.id, m.kind
+    )
+    select
+         coalesce(fm.size, 0) as size,
+         fm.created_at,
+         fm.accessed_at,
+         fm.modified_at,
+         fm.kind
+from file_metadata fm
+union all
 select
-    coalesce(length(d.data), 0) as size,
-    d.created_at,
-    d.accessed_at,
-    d.modified_at,
-    f.kind
-from
-    table_fs_files                f
-    inner join match              m on f.id = m.id
-    inner join table_fs_file_data d on m.id = d.file_id
-where
-    filesystem_id = fs.id
+      0 as size,
+      null as created_at,
+      null as accessed_at,
+      null as modified_at,
+       'directory' as kind  
+from (value (1)) as temp(dummy)          
+where path = '/';
 $$;
